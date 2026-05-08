@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ctf-writeup-backend
+    runtime: node
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: node dist/app.js
+    envVars:
+      - key: NODE_ENV
+        value: production
