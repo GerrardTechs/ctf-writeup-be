@@ -77,8 +77,11 @@ async function buildApp() {
   });
 
   await fastify.register(cors, {
-    origin: process.env.NODE_ENV === 'development' ? true : ['https://domainmu.com'],
+    origin: process.env.NODE_ENV === 'development' 
+      ? true 
+      : ['https://ctf-writeup-frontend.vercel.app'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true,
   });
 
   await fastify.register(rateLimit, {
