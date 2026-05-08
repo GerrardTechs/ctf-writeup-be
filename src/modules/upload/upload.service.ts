@@ -1,4 +1,4 @@
-import { fileTypeFromBuffer } from 'file-type';
+import fileType from 'file-type';
 import sharp from 'sharp';
 import { createHash, randomUUID } from 'crypto';
 import cloudinary from './cloudinary.client';
@@ -20,7 +20,7 @@ export async function uploadImage(
   }
 
   // 2. Magic byte check — jangan percaya Content-Type header
-  const detected = await fileTypeFromBuffer(buffer);
+  const detected = await fileType.fromBuffer(buffer);
   if (!detected || !ALLOWED_MIME.has(detected.mime)) {
     throw { statusCode: 415, message: 'Tipe file tidak diizinkan. Hanya jpg, png, webp, gif.' };
   }
