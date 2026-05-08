@@ -1,0 +1,6 @@
+Name         : ctf-writeup-backend
+Region       : Singapore (paling dekat ke Indonesia)
+Branch       : main
+Runtime      : Node
+Build Command: npm ci && npx prisma generate && npm run build
+Start Command: npm start
