@@ -77,9 +77,17 @@ async function buildApp() {
   });
 
   await fastify.register(cors, {
-    origin: process.env.NODE_ENV === 'development' 
-      ? true 
-      : ['https://ctf-writeup-frontend.vercel.app'],
+    origin: (origin, cb) => {
+      if (
+        !origin ||
+        origin === 'http://localhost:5173' ||
+        origin.endsWith('.vercel.app')
+      ) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not allowed by CORS'), false);
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
   });
