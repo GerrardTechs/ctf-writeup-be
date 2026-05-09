@@ -11,6 +11,7 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { writeupRoutes } from './modules/writeup/writeup.routes';
 import { uploadRoutes } from './modules/upload/upload.routes';
 import { pdfRoutes } from './modules/pdf/pdf.routes';
+import { aiRoutes } from './modules/ai/ai.routes';
 
 
 const fastify = Fastify({
@@ -118,6 +119,7 @@ async function buildApp() {
   // Register
   await fastify.register(writeupRoutes, { prefix: '/api/v1/writeups' });
   await fastify.register(pdfRoutes, { prefix: '/api/v1/writeups' });
+  await fastify.register(aiRoutes, { prefix: '/api/v1/writeups' });
   await fastify.register(uploadRoutes, { prefix: '/api/v1/writeups' });
 
   // Error handler
