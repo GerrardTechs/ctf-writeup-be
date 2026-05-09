@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
-import { Readable } from 'stream';
 import sharp from 'sharp';
 
 interface PdfImage { secureUrl: string; }
@@ -30,63 +29,62 @@ const DIFF_COLOR: Record<string, string> = {
   INSANE: '#f87171',
 };
 
-const CAT_ICON: Record<string, string> = {
-  WEB: '[WEB]', PWN: '[PWN]', CRYPTO: '[CRYPTO]',
-  FORENSICS: '[FOR]', MISC: '[MISC]', REV: '[REV]', OSINT: '[OSINT]',
-};
-
 function hexToRgb(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
 }
 
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+async function fetchImage(url: string): Promise<Buffer | null> {
   try {
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-    
-    // Konversi ke JPEG karena PDFKit tidak support webp
-    const jpegBuffer = await sharp(Buffer.from(response.data))
-      .jpeg({ quality: 85 })
-      .toBuffer();
-      
-    return jpegBuffer;
+    return await sharp(Buffer.from(response.data)).jpeg({ quality: 85 }).toBuffer();
   } catch (err) {
-    console.error('Failed to fetch/convert image:', url, err);
+    console.error('Failed to fetch image:', url, err);
     return null;
   }
 }
 
 export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffer> {
+  // Pre-fetch all images first
+  const stepImages: (Buffer | null)[][] = [];
+  for (const step of writeup.steps) {
+    const imgs: (Buffer | null)[] = [];
+    for (const img of step.images) {
+      imgs.push(await fetchImage(img.secureUrl));
+    }
+    stepImages.push(imgs);
+  }
+
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 40, bottom: 40, left: 50, right: 50 },
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
         bufferPages: true,
         info: {
           Title: writeup.title,
           Author: writeup.user.username,
-          Subject: `CTF Writeup - ${writeup.ctfName}`,
           Creator: 'CTF Writeup Generator',
         },
       });
 
-      const buffers: Buffer[] = [];
-      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
-
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const W = doc.page.width;
+      const PW = doc.page.width;   // 595
+      const PH = doc.page.height;  // 842
       const ML = 50;
       const MR = 50;
-      const CW = W - ML - MR;
+      const CW = PW - ML - MR;
       const diffColor = DIFF_COLOR[writeup.difficulty] ?? '#22c55e';
       const diffRgb = hexToRgb(diffColor);
       const date = new Date(writeup.createdAt).toLocaleDateString('en-US', {
@@ -96,334 +94,211 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
       // ── COVER PAGE ─────────────────────────────────────
 
       // Background
-      doc.rect(0, 0, W, doc.page.height).fill('#0b111b');
+      doc.rect(0, 0, PW, PH).fill('#0b111b');
 
       // Top accent bar
-      doc.rect(0, 0, W, 4).fill(diffColor);
+      doc.rect(0, 0, PW, 5).fill(diffColor);
 
-      // Logo + title
-      doc.rect(ML, 36, 10, 10).fill(diffColor);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(8)
-        .fill('#94a3b8')
-        .text('CTF WRITEUP GENERATOR', ML + 16, 39);
+      // Logo
+      doc.rect(ML, 40, 10, 10).fill(diffColor);
+      doc.font('Helvetica-Bold').fontSize(8).fill('#94a3b8')
+        .text('CTF WRITEUP GENERATOR', ML + 16, 44, { lineBreak: false });
 
-      // Date top right
-      doc
-        .font('Helvetica')
-        .fontSize(8)
-        .fill('#475569')
-        .text(date, ML, 39, { width: CW, align: 'right' });
+      // Date
+      doc.font('Helvetica').fontSize(8).fill('#475569')
+        .text(date, 0, 44, { width: PW - MR, align: 'right', lineBreak: false });
 
-      // Category + difficulty badges
-      doc.y = 90;
-      const catLabel = CAT_ICON[writeup.category] ?? writeup.category;
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(8)
-        .fill('#64748b')
-        .text(`${catLabel}  ·  ${writeup.difficulty}`, ML, doc.y);
+      // Badges
+      doc.font('Helvetica-Bold').fontSize(8).fill(diffColor)
+        .text(`[${writeup.category}]  ·  ${writeup.difficulty}`, ML, 80);
 
-      // Main title
-      doc.y += 14;
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(30)
-        .fill('#f8fafc')
-        .text(writeup.title, ML, doc.y, { width: CW });
+      // Title
+      doc.font('Helvetica-Bold').fontSize(32).fill('#f8fafc')
+        .text(writeup.title, ML, 100, { width: CW });
 
       // CTF name
-      doc.y += 10;
-      doc
-        .font('Helvetica')
-        .fontSize(14)
-        .fill('#64748b')
-        .text(writeup.ctfName, ML, doc.y);
+      const titleHeight = doc.heightOfString(writeup.title, {
+        width: CW, fontSize: 32,
+      });
+      doc.font('Helvetica').fontSize(14).fill('#64748b')
+        .text(writeup.ctfName, ML, 108 + titleHeight, { width: CW });
 
       // Description box
       if (writeup.description) {
-        doc.y += 24;
-        const descLines = doc
-          .font('Helvetica')
-          .fontSize(10)
-          .fill('#cbd5e1');
-        const descH = doc.heightOfString(writeup.description, { width: CW - 20 }) + 20;
-        doc
-          .rect(ML, doc.y, CW, descH)
-          .fill('#1e293b');
-        doc
-          .rect(ML, doc.y, 3, descH)
-          .fill(diffColor);
-        descLines.text(writeup.description, ML + 12, doc.y + 10, { width: CW - 20 });
-        doc.y += descH + 8;
+        const descY = 130 + titleHeight;
+        const descH = doc.heightOfString(writeup.description, {
+          width: CW - 20, fontSize: 10,
+        }) + 24;
+        doc.rect(ML, descY, CW, descH).fill('#1e293b');
+        doc.rect(ML, descY, 3, descH).fill(diffColor);
+        doc.font('Helvetica').fontSize(10).fill('#cbd5e1')
+          .text(writeup.description, ML + 12, descY + 12, { width: CW - 20 });
       }
 
-      // Author strip bottom of cover
-      const authorY = doc.page.height - 70;
-      doc
-        .moveTo(ML, authorY)
-        .lineTo(W - MR, authorY)
-        .strokeColor('#1e293b')
-        .lineWidth(0.5)
-        .stroke();
+      // Author strip — fixed at bottom of cover
+      const authorY = PH - 80;
+      doc.moveTo(ML, authorY).lineTo(PW - MR, authorY)
+        .strokeColor('#1e293b').lineWidth(0.5).stroke();
 
-      // Avatar circle
-      doc
-        .circle(ML + 14, authorY + 20, 14)
-        .fill(diffColor);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(12)
-        .fill('#0b111b')
-        .text(
-          writeup.user.username.charAt(0).toUpperCase(),
-          ML + 9,
-          authorY + 14,
-        );
+      doc.circle(ML + 14, authorY + 22, 14).fill(diffColor);
+      doc.font('Helvetica-Bold').fontSize(12).fill('#0b111b')
+        .text(writeup.user.username.charAt(0).toUpperCase(), ML + 8, authorY + 16, { lineBreak: false });
 
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(11)
-        .fill('#e2e8f0')
-        .text(writeup.user.username, ML + 34, authorY + 12);
-      doc
-        .font('Helvetica')
-        .fontSize(8)
-        .fill('#475569')
-        .text('Author', ML + 34, authorY + 25);
+      doc.font('Helvetica-Bold').fontSize(11).fill('#e2e8f0')
+        .text(writeup.user.username, ML + 34, authorY + 14, { lineBreak: false });
+      doc.font('Helvetica').fontSize(8).fill('#475569')
+        .text('Author', ML + 34, authorY + 27, { lineBreak: false });
 
       const stepsLabel = `${writeup.steps.length} step${writeup.steps.length > 1 ? 's' : ''}`;
-      doc
-        .font('Helvetica')
-        .fontSize(9)
-        .fill('#475569')
-        .text(stepsLabel, ML, authorY + 18, { width: CW, align: 'right' });
+      doc.font('Helvetica').fontSize(9).fill('#475569')
+        .text(stepsLabel, 0, authorY + 20, { width: PW - MR, align: 'right', lineBreak: false });
 
       // ── CONTENT PAGES ──────────────────────────────────
 
-      doc.addPage();
-      doc.rect(0, 0, W, doc.page.height).fill('#111111');
-      doc.rect(0, 0, W, 4).fill(diffColor);
+      doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+      doc.rect(0, 0, PW, PH).fill('#111111');
+      doc.rect(0, 0, PW, 5).fill(diffColor);
+
+      let y = 40;
+
+      const newPage = () => {
+        doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+        doc.rect(0, 0, PW, PH).fill('#111111');
+        doc.rect(0, 0, PW, 5).fill(diffColor);
+        y = 40;
+      };
+
+      const checkPage = (needed: number) => {
+        if (y + needed > PH - 50) newPage();
+      };
 
       // Section heading
-      doc.y = 40;
-      doc.rect(ML, doc.y, 3, 14).fill(diffColor);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(9)
-        .fill('#64748b')
-        .text('EXPLOITATION STEPS', ML + 10, doc.y + 2);
-      doc.y += 22;
+      doc.rect(ML, y, 3, 16).fill(diffColor);
+      doc.font('Helvetica-Bold').fontSize(9).fill('#64748b')
+        .text('EXPLOITATION STEPS', ML + 10, y + 4, { lineBreak: false });
+      y += 24;
 
-      // Divider
-      doc
-        .moveTo(ML, doc.y)
-        .lineTo(W - MR, doc.y)
-        .strokeColor('#262626')
-        .lineWidth(0.3)
-        .stroke();
-      doc.y += 10;
+      doc.moveTo(ML, y).lineTo(PW - MR, y)
+        .strokeColor('#262626').lineWidth(0.3).stroke();
+      y += 14;
 
       // Steps
       for (let i = 0; i < writeup.steps.length; i++) {
         const step = writeup.steps[i];
+        checkPage(40);
 
-        // Check if need new page
-        if (doc.y > doc.page.height - 100) {
-          doc.addPage();
-          doc.rect(0, 0, W, doc.page.height).fill('#111111');
-          doc.y = 40;
-        }
-
-        // Step header box
-        doc
-          .rect(ML, doc.y, CW, 22)
-          .fill('#1a1a1a');
-
-        // Step number badge
-        doc
-          .roundedRect(ML + 6, doc.y + 4, 14, 14, 3)
+        // Step header
+        doc.rect(ML, y, CW, 24).fill('#1a1a1a');
+        doc.roundedRect(ML + 6, y + 5, 14, 14, 3)
           .fill(diffColor + '33');
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(8)
-          .fill(diffColor)
-          .text(`${i + 1}`, ML + 10, doc.y + 8);
-
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(10)
-          .fill('#e2e8f0')
-          .text(`Step ${i + 1}`, ML + 26, doc.y + 8);
-
-        doc.y += 28;
+        doc.font('Helvetica-Bold').fontSize(8).fill(diffColor)
+          .text(`${i + 1}`, ML + 11, y + 9, { lineBreak: false });
+        doc.font('Helvetica-Bold').fontSize(10).fill('#e2e8f0')
+          .text(`Step ${i + 1}`, ML + 26, y + 9, { lineBreak: false });
+        y += 30;
 
         // Description
-        doc
-          .font('Helvetica')
-          .fontSize(10)
-          .fill('#cbd5e1')
-          .text(step.description, ML, doc.y, { width: CW });
-        doc.y += doc.heightOfString(step.description, { width: CW }) + 8;
+        checkPage(20);
+        const descH = doc.heightOfString(step.description, { width: CW, fontSize: 10 });
+        doc.font('Helvetica').fontSize(10).fill('#cbd5e1')
+          .text(step.description, ML, y, { width: CW });
+        y += descH + 10;
 
         // Command block
         if (step.command) {
-          if (doc.y > doc.page.height - 80) {
-            doc.addPage();
-            doc.rect(0, 0, W, doc.page.height).fill('#111111');
-            doc.y = 40;
-          }
-          const cmdH = doc.heightOfString(step.command, {
-            width: CW - 16,
-            lineBreak: true,
-          }) + 28;
-          doc.rect(ML, doc.y, CW, cmdH).fill('#141414');
-          doc.rect(ML, doc.y, CW, 16).fill('#1e1e1e');
-
-          // Traffic lights
-          doc.circle(ML + 8, doc.y + 8, 3).fill('#ff5f57');
-          doc.circle(ML + 18, doc.y + 8, 3).fill('#febc2e');
-          doc.circle(ML + 28, doc.y + 8, 3).fill('#28c840');
-          doc
-            .font('Helvetica')
-            .fontSize(7)
-            .fill('#6b7280')
-            .text('bash', ML + 38, doc.y + 5);
-
-          doc
-            .font('Helvetica')
-            .fontSize(9)
-            .fill('#86efac')
-            .text(step.command, ML + 8, doc.y + 20, { width: CW - 16 });
-          doc.y += cmdH + 6;
+          const cmdH = doc.heightOfString(step.command, { width: CW - 20, fontSize: 9 }) + 32;
+          checkPage(cmdH + 10);
+          doc.rect(ML, y, CW, cmdH).fill('#141414');
+          doc.rect(ML, y, CW, 18).fill('#1e1e1e');
+          doc.circle(ML + 8, y + 9, 3).fill('#ff5f57');
+          doc.circle(ML + 18, y + 9, 3).fill('#febc2e');
+          doc.circle(ML + 28, y + 9, 3).fill('#28c840');
+          doc.font('Helvetica').fontSize(7).fill('#6b7280')
+            .text('bash', ML + 38, y + 6, { lineBreak: false });
+          doc.font('Helvetica').fontSize(9).fill('#86efac')
+            .text(step.command, ML + 10, y + 22, { width: CW - 20 });
+          y += cmdH + 8;
         }
 
         // Output block
         if (step.commandOutput) {
-          if (doc.y > doc.page.height - 80) {
-            doc.addPage();
-            doc.rect(0, 0, W, doc.page.height).fill('#111111');
-            doc.y = 40;
-          }
-          const outH = doc.heightOfString(step.commandOutput, {
-            width: CW - 16,
-            lineBreak: true,
-          }) + 28;
-          doc.rect(ML, doc.y, CW, outH).fill('#0d0d0d');
-          doc.rect(ML, doc.y, CW, 16).fill('#1a1a1a');
-
-          doc.circle(ML + 8, doc.y + 8, 3).fill('#ff5f57');
-          doc.circle(ML + 18, doc.y + 8, 3).fill('#febc2e');
-          doc.circle(ML + 28, doc.y + 8, 3).fill('#28c840');
-          doc
-            .font('Helvetica')
-            .fontSize(7)
-            .fill('#6b7280')
-            .text('output', ML + 38, doc.y + 5);
-
-          doc
-            .font('Helvetica')
-            .fontSize(9)
-            .fill('#7dd3fc')
-            .text(step.commandOutput, ML + 8, doc.y + 20, { width: CW - 16 });
-          doc.y += outH + 6;
+          const outH = doc.heightOfString(step.commandOutput, { width: CW - 20, fontSize: 9 }) + 32;
+          checkPage(outH + 10);
+          doc.rect(ML, y, CW, outH).fill('#0d0d0d');
+          doc.rect(ML, y, CW, 18).fill('#1a1a1a');
+          doc.circle(ML + 8, y + 9, 3).fill('#ff5f57');
+          doc.circle(ML + 18, y + 9, 3).fill('#febc2e');
+          doc.circle(ML + 28, y + 9, 3).fill('#28c840');
+          doc.font('Helvetica').fontSize(7).fill('#6b7280')
+            .text('output', ML + 38, y + 6, { lineBreak: false });
+          doc.font('Helvetica').fontSize(9).fill('#7dd3fc')
+            .text(step.commandOutput, ML + 10, y + 22, { width: CW - 20 });
+          y += outH + 8;
         }
 
         // Images
-        for (const img of step.images) {
-          const imgBuffer = await fetchImageBuffer(img.secureUrl);
-          if (imgBuffer) {
-            if (doc.y > doc.page.height - 120) {
-              doc.addPage();
-              doc.rect(0, 0, W, doc.page.height).fill('#111111');
-              doc.y = 40;
-            }
-            try {
-              doc.image(imgBuffer, ML, doc.y, {
-                width: CW,
-                align: 'center',
-              });
-              doc.y += 8;
-            } catch { /* skip corrupted images */ }
+        const imgs = stepImages[i];
+        for (const imgBuf of imgs) {
+          if (!imgBuf) continue;
+          try {
+            const meta = await sharp(imgBuf).metadata();
+            const ratio = (meta.height ?? 200) / (meta.width ?? 300);
+            const imgW = CW;
+            const imgH = Math.min(imgW * ratio, 220);
+            checkPage(imgH + 16);
+            doc.rect(ML, y, imgW, imgH).strokeColor('#262626').lineWidth(0.5).stroke();
+            doc.image(imgBuf, ML, y, { width: imgW, height: imgH });
+            y += imgH + 12;
+          } catch (e) {
+            console.error('Failed to render image to PDF:', e);
           }
         }
 
-        doc.y += 10;
+        y += 8;
 
         // Step divider
         if (i < writeup.steps.length - 1) {
-          doc
-            .moveTo(ML + 20, doc.y)
-            .lineTo(W - MR - 20, doc.y)
-            .strokeColor('#262626')
-            .lineWidth(0.2)
-            .stroke();
-          doc.y += 12;
+          checkPage(20);
+          doc.moveTo(ML + 20, y).lineTo(PW - MR - 20, y)
+            .strokeColor('#262626').lineWidth(0.2).stroke();
+          y += 16;
         }
       }
 
-      // Flag section
+      // Flag
       if (writeup.flag) {
-        if (doc.y > doc.page.height - 80) {
-          doc.addPage();
-          doc.rect(0, 0, W, doc.page.height).fill('#111111');
-          doc.y = 40;
-        }
+        checkPage(60);
+        y += 12;
+        doc.rect(ML, y, 3, 16).fill(diffColor);
+        doc.font('Helvetica-Bold').fontSize(9).fill('#64748b')
+          .text('FLAG', ML + 10, y + 4, { lineBreak: false });
+        y += 24;
 
-        doc.y += 10;
-        doc.rect(ML, doc.y, 3, 14).fill(diffColor);
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(9)
-          .fill('#64748b')
-          .text('FLAG', ML + 10, doc.y + 2);
-        doc.y += 22;
-
-        const flagH = 36;
-        doc
-          .rect(ML, doc.y, CW, flagH)
-          .fill('#0f2a1a');
-        doc
-          .rect(ML, doc.y, CW, flagH)
-          .strokeColor('#166534')
-          .lineWidth(0.5)
-          .stroke();
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(13)
-          .fill('#4ade80')
-          .text(writeup.flag, ML + 12, doc.y + 12, { width: CW - 24 });
-        doc.y += flagH + 10;
+        const flagH = 40;
+        doc.rect(ML, y, CW, flagH).fill('#0f2a1a');
+        doc.moveTo(ML, y).lineTo(PW - MR, y)
+          .strokeColor('#166534').lineWidth(0.5).stroke();
+        doc.moveTo(ML, y + flagH).lineTo(PW - MR, y + flagH)
+          .strokeColor('#166534').lineWidth(0.5).stroke();
+        doc.font('Helvetica-Bold').fontSize(14).fill('#4ade80')
+          .text(writeup.flag, ML + 12, y + 13, { width: CW - 24, lineBreak: false });
+        y += flagH + 12;
       }
 
       // Footer on all pages
       doc.flushPages();
-const range = doc.bufferedPageRange();
-for (let i = 0; i < range.count; i++) {
-  doc.switchToPage(range.start + i);
-  const footerY = doc.page.height - 20;
-  doc
-    .moveTo(ML, footerY - 6)
-    .lineTo(W - MR, footerY - 6)
-    .strokeColor('#1e293b')
-    .lineWidth(0.3)
-    .stroke();
-  doc
-    .font('Helvetica')
-    .fontSize(7)
-    .fill('#334155')
-    .text('CTF Writeup Generator', ML, footerY);
-  doc
-    .font('Helvetica')
-    .fontSize(7)
-    .fill('#334155')
-    .text(
-      `${writeup.title} · ${writeup.ctfName}  |  ${i + 1} / ${range.count}`,
-      ML, footerY,
-      { width: CW, align: 'right' }
-    );
-}
+      const range = doc.bufferedPageRange();
+      for (let i = 0; i < range.count; i++) {
+        doc.switchToPage(range.start + i);
+        const fy = PH - 22;
+        doc.moveTo(ML, fy - 6).lineTo(PW - MR, fy - 6)
+          .strokeColor('#1e293b').lineWidth(0.3).stroke();
+        doc.font('Helvetica').fontSize(7).fill('#334155')
+          .text('CTF Writeup Generator', ML, fy, { lineBreak: false });
+        doc.font('Helvetica').fontSize(7).fill('#334155')
+          .text(`${writeup.title} · ${writeup.ctfName}  |  ${i + 1} / ${range.count}`,
+            0, fy, { width: PW - MR, align: 'right', lineBreak: false });
+      }
 
       doc.end();
     } catch (err) {
