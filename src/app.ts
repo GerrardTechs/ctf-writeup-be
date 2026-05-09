@@ -127,7 +127,11 @@ async function buildApp() {
 
   // Health check
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
-
+  
+  fastify.get('/debug-env', async () => ({
+    hasApiKey: !!process.env.ANTHROPIC_API_KEY,
+    keyPrefix: process.env.ANTHROPIC_API_KEY?.substring(0, 10) ?? 'NOT SET',
+  }));
   return fastify;
 }
 
