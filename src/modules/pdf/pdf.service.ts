@@ -237,33 +237,33 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
         }
 
         // Images
-        const imgs = stepImages[i];
-        for (const imgBuf of imgs) {
-          if (!imgBuf) continue;
-          try {
-            const meta = await sharp(imgBuf).metadata();
-const naturalW = meta.width ?? 500;
-const naturalH = meta.height ?? 300;
-const ratio = naturalH / naturalW;
-const imgW = Math.min(CW, naturalW); // tidak scale up kalau gambar kecil
-const imgH = imgW * ratio;
-const maxH = 250;
+        // Images
+const imgs = stepImages[i];
+for (const imgBuf of imgs) {
+  if (!imgBuf) continue;
+  try {
+    const meta = await sharp(imgBuf).metadata();
+    const naturalW = meta.width ?? 500;
+    const naturalH = meta.height ?? 300;
+    const ratio = naturalH / naturalW;
+    const imgW = CW;
+    const imgH = Math.min(imgW * ratio, 280);
 
-checkPage(Math.min(imgH, maxH) + 16);
+    // Selalu mulai gambar dari halaman baru kalau sisa ruang < setengah halaman
+    const remainingSpace = PH - 50 - y;
+    if (remainingSpace < imgH || remainingSpace < 150) {
+      newPage();
+    }
 
-if (imgH > maxH) {
-  // Gambar tinggi — crop/fit ke maxH
-  doc.image(imgBuf, ML, y, { width: imgW, height: maxH, cover: [imgW, maxH] });
-  y += maxH + 12;
-} else {
-  // Gambar proporsional — render natural
-  doc.image(imgBuf, ML, y, { width: imgW });
-  y += imgH + 12;
+    doc.image(imgBuf, ML, y, { width: imgW, height: imgH });
+    y += imgH + 16;
+
+    // Setelah gambar, pastikan ada ruang untuk konten berikutnya
+    checkPage(40);
+  } catch (e) {
+    console.error('Failed to render image to PDF:', e);
+  }
 }
-          } catch (e) {
-            console.error('Failed to render image to PDF:', e);
-          }
-        }
 
         y += 8;
 
