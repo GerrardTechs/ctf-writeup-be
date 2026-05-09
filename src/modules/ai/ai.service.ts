@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
 interface StepInput {
   orderIndex: number;
@@ -28,14 +28,8 @@ interface EnhancedWriteup {
 }
 
 export async function enhanceWriteupWithAI(writeup: WriteupInput): Promise<EnhancedWriteup> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.7,
-      maxOutputTokens: 4096,
-    },
+  const client = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
   });
 
   const stepsText = writeup.steps
@@ -47,8 +41,7 @@ export async function enhanceWriteupWithAI(writeup: WriteupInput): Promise<Enhan
     ].filter(Boolean).join('\n'))
     .join('\n\n');
 
-  const prompt = `
-Kamu adalah seorang CTF player berpengalaman yang sedang menulis writeup profesional.
+  const prompt = `Kamu adalah seorang CTF player berpengalaman yang sedang menulis writeup profesional.
 
 Data challenge:
 - Judul: ${writeup.title}
@@ -71,19 +64,19 @@ ATURAN PENTING:
 - Jangan ubah command atau output teknis apapun
 - Gunakan sudut pandang orang pertama ("Saya")
 - Jangan tambah informasi teknis baru
-- Balas HANYA JSON valid dengan format berikut:
-
-{
-  "description": "deskripsi challenge",
-  "steps": [
-    { "orderIndex": 0, "description": "narasi step 1" }
-  ]
-}
-`.trim();
+- Balas HANYA JSON valid tanpa markdown tanpa backtick dengan format:
+{"description":"string","steps":[{"orderIndex":0,"description":"string"}]}`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const completion = await client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 4096,
+      response_format: { type: 'json_object' },
+    });
+
+    const responseText = completion.choices[0]?.message?.content ?? '';
     const parsed = JSON.parse(responseText) as EnhancedWriteup;
 
     if (!parsed.description || !Array.isArray(parsed.steps)) {
