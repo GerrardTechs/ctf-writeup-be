@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
 import { Readable } from 'stream';
+import sharp from 'sharp';
 
 interface PdfImage { secureUrl: string; }
 interface PdfStep {
@@ -43,18 +44,20 @@ function hexToRgb(hex: string): [number, number, number] {
 
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
-    console.log('Fetching image:', url);
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-    console.log('Image fetched, size:', response.data.byteLength);
-    return Buffer.from(response.data);
+    
+    // Konversi ke JPEG karena PDFKit tidak support webp
+    const jpegBuffer = await sharp(Buffer.from(response.data))
+      .jpeg({ quality: 85 })
+      .toBuffer();
+      
+    return jpegBuffer;
   } catch (err) {
-    console.error('Failed to fetch image:', url, err);
+    console.error('Failed to fetch/convert image:', url, err);
     return null;
   }
 }
@@ -395,30 +398,32 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
       }
 
       // Footer on all pages
-      const totalPages = doc.bufferedPageRange().count;
-      for (let i = 0; i < totalPages; i++) {
-        doc.switchToPage(i);
-        const footerY = doc.page.height - 20;
-        doc
-          .moveTo(ML, footerY - 6)
-          .lineTo(W - MR, footerY - 6)
-          .strokeColor('#1e293b')
-          .lineWidth(0.3)
-          .stroke();
-        doc
-          .font('Helvetica')
-          .fontSize(7)
-          .fill('#334155')
-          .text('CTF Writeup Generator', ML, footerY);
-        doc
-          .font('Helvetica')
-          .fontSize(7)
-          .fill('#334155')
-          .text(`${writeup.title} · ${writeup.ctfName}  |  ${i + 1} / ${totalPages}`, ML, footerY, {
-            width: CW,
-            align: 'right',
-          });
-      }
+      doc.flushPages();
+const range = doc.bufferedPageRange();
+for (let i = 0; i < range.count; i++) {
+  doc.switchToPage(range.start + i);
+  const footerY = doc.page.height - 20;
+  doc
+    .moveTo(ML, footerY - 6)
+    .lineTo(W - MR, footerY - 6)
+    .strokeColor('#1e293b')
+    .lineWidth(0.3)
+    .stroke();
+  doc
+    .font('Helvetica')
+    .fontSize(7)
+    .fill('#334155')
+    .text('CTF Writeup Generator', ML, footerY);
+  doc
+    .font('Helvetica')
+    .fontSize(7)
+    .fill('#334155')
+    .text(
+      `${writeup.title} · ${writeup.ctfName}  |  ${i + 1} / ${range.count}`,
+      ML, footerY,
+      { width: CW, align: 'right' }
+    );
+}
 
       doc.end();
     } catch (err) {
