@@ -43,12 +43,18 @@ function hexToRgb(hex: string): [number, number, number] {
 
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
+    console.log('Fetching image:', url);
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 10000,
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
     });
+    console.log('Image fetched, size:', response.data.byteLength);
     return Buffer.from(response.data);
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch image:', url, err);
     return null;
   }
 }
