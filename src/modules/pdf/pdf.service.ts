@@ -242,13 +242,24 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
           if (!imgBuf) continue;
           try {
             const meta = await sharp(imgBuf).metadata();
-            const ratio = (meta.height ?? 200) / (meta.width ?? 300);
-            const imgW = CW;
-            const imgH = Math.min(imgW * ratio, 220);
-            checkPage(imgH + 16);
-            doc.rect(ML, y, imgW, imgH).strokeColor('#262626').lineWidth(0.5).stroke();
-            doc.image(imgBuf, ML, y, { width: imgW, height: imgH });
-            y += imgH + 12;
+const naturalW = meta.width ?? 500;
+const naturalH = meta.height ?? 300;
+const ratio = naturalH / naturalW;
+const imgW = Math.min(CW, naturalW); // tidak scale up kalau gambar kecil
+const imgH = imgW * ratio;
+const maxH = 250;
+
+checkPage(Math.min(imgH, maxH) + 16);
+
+if (imgH > maxH) {
+  // Gambar tinggi — crop/fit ke maxH
+  doc.image(imgBuf, ML, y, { width: imgW, height: maxH, cover: [imgW, maxH] });
+  y += maxH + 12;
+} else {
+  // Gambar proporsional — render natural
+  doc.image(imgBuf, ML, y, { width: imgW });
+  y += imgH + 12;
+}
           } catch (e) {
             console.error('Failed to render image to PDF:', e);
           }
