@@ -69,7 +69,8 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
       });
 
       const buffers: Buffer[] = [];
-      doc.on('data', (chunk) => buffers.push(chunk));
+      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
