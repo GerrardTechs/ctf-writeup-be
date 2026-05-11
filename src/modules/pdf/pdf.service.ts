@@ -82,7 +82,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
         info: {
           Title: writeup.title,
           Author: writeup.user.username,
-          Creator: 'CTF Writeup Generator',
+          Creator: 'PWNSCRIBE',
         },
       });
 
@@ -113,7 +113,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
       // Logo
       doc.rect(ML, 40, 10, 10).fill(diffColor);
       doc.font('Helvetica-Bold').fontSize(8).fill('#94a3b8')
-        .text('CTF WRITEUP GENERATOR', ML + 16, 44, { lineBreak: false });
+        .text('PWNSCRIBE', ML + 16, 44, { lineBreak: false });
 
       // Date
       doc.font('Helvetica').fontSize(8).fill('#475569')
