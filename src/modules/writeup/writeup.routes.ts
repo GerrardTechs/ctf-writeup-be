@@ -150,6 +150,61 @@ export async function writeupRoutes(fastify: FastifyInstance) {
       .header('Content-Disposition', `attachment; filename="${safeFilename}.md"`)
       .send(markdown);
   });
+
+  // Generate share link
+fastify.post('/:id/share', {
+  schema: {
+    ...bearerAuth,
+    tags: ['Writeups'],
+    summary: 'Generate share link untuk writeup',
+  },
+}, async (req: any, reply) => {
+  const { prisma } = await import('../../config/database');
+  const { randomBytes } = await import('crypto');
+
+  const writeup = await prisma.writeup.findFirst({
+    where: { id: req.params.id, userId: userId(req) },
+  });
+
+  if (!writeup) {
+    return reply.status(404).send({ success: false, error: 'Writeup tidak ditemukan' });
+  }
+
+  // Generate token kalau belum ada
+  const shareToken = writeup.shareToken ?? randomBytes(24).toString('hex');
+
+  await prisma.writeup.update({
+    where: { id: req.params.id },
+    data: { shareToken },
+  });
+
+  return reply.send({
+    success: true,
+    data: {
+      shareToken,
+      shareUrl: `${process.env.FRONTEND_URL}/share/${shareToken}`,
+      message: `Saya sudah membuat writeup "${writeup.title}" menggunakan PwnScribe! Cek di sini:`,
+    },
+  });
+});
+
+// Revoke share link
+fastify.delete('/:id/share', {
+  schema: {
+    ...bearerAuth,
+    tags: ['Writeups'],
+    summary: 'Nonaktifkan share link',
+  },
+}, async (req: any, reply) => {
+  const { prisma } = await import('../../config/database');
+
+  await prisma.writeup.updateMany({
+    where: { id: req.params.id, userId: userId(req) },
+    data: { shareToken: null },
+  });
+
+  return reply.send({ success: true, message: 'Share link dinonaktifkan' });
+});
   
   // ─── STEP ROUTES ─────────────────────────────────────
 

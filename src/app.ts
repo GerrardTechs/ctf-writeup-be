@@ -116,6 +116,36 @@ async function buildApp() {
   // Routes
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 
+  // Public route — tidak perlu auth
+fastify.get('/api/v1/public/writeup/:token', async (req: any, reply) => {
+  const { prisma } = await import('./config/database');
+  const { decryptFlag } = await import('./utils/encryption');
+
+  const writeup = await prisma.writeup.findFirst({
+    where: { shareToken: req.params.token },
+    include: {
+      user: { select: { username: true } },
+      steps: {
+        orderBy: { orderIndex: 'asc' },
+        include: { images: { select: { id: true, secureUrl: true } } },
+      },
+    },
+  });
+
+  if (!writeup) {
+    return reply.status(404).send({ success: false, error: 'Link tidak valid atau sudah dinonaktifkan' });
+  }
+
+  return reply.send({
+    success: true,
+    data: {
+      ...writeup,
+      flag: writeup.flag ? decryptFlag(writeup.flag) : null,
+      shareToken: undefined, // jangan expose token
+    },
+  });
+});
+
   // Register
   await fastify.register(writeupRoutes, { prefix: '/api/v1/writeups' });
   await fastify.register(pdfRoutes, { prefix: '/api/v1/writeups' });

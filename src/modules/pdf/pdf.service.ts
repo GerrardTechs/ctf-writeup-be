@@ -44,9 +44,20 @@ async function fetchImage(url: string): Promise<Buffer | null> {
       timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-    return await sharp(Buffer.from(response.data)).jpeg({ quality: 85 }).toBuffer();
+
+    // Resize ke max width 900px, konversi ke JPEG quality 90
+    // Ini mencegah gambar terlalu besar dan blur di PDF
+    const optimized = await sharp(Buffer.from(response.data))
+      .resize({
+        width: 900,
+        withoutEnlargement: true, // jangan scale up kalau gambar kecil
+      })
+      .jpeg({ quality: 90, progressive: true })
+      .toBuffer();
+
+    return optimized;
   } catch (err) {
-    console.error('Failed to fetch image:', url, err);
+    console.error('Failed to fetch/optimize image:', url, err);
     return null;
   }
 }
@@ -118,7 +129,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
 
       // CTF name
       const titleHeight = doc.heightOfString(writeup.title, {
-        width: CW, fontSize: 32,
+        width: CW,
       });
       doc.font('Helvetica').fontSize(14).fill('#64748b')
         .text(writeup.ctfName, ML, 108 + titleHeight, { width: CW });
@@ -127,7 +138,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
       if (writeup.description) {
         const descY = 130 + titleHeight;
         const descH = doc.heightOfString(writeup.description, {
-          width: CW - 20, fontSize: 10,
+          width: CW - 20,
         }) + 24;
         doc.rect(ML, descY, CW, descH).fill('#1e293b');
         doc.rect(ML, descY, 3, descH).fill(diffColor);
@@ -199,14 +210,14 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
 
         // Description
         checkPage(20);
-        const descH = doc.heightOfString(step.description, { width: CW, fontSize: 10 });
+        const descH = doc.heightOfString(step.description, { width: CW});
         doc.font('Helvetica').fontSize(10).fill('#cbd5e1')
           .text(step.description, ML, y, { width: CW });
         y += descH + 10;
 
         // Command block
         if (step.command) {
-          const cmdH = doc.heightOfString(step.command, { width: CW - 20, fontSize: 9 }) + 32;
+          const cmdH = doc.heightOfString(step.command, { width: CW - 20}) + 32;
           checkPage(cmdH + 10);
           doc.rect(ML, y, CW, cmdH).fill('#141414');
           doc.rect(ML, y, CW, 18).fill('#1e1e1e');
@@ -222,7 +233,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
 
         // Output block
         if (step.commandOutput) {
-          const outH = doc.heightOfString(step.commandOutput, { width: CW - 20, fontSize: 9 }) + 32;
+          const outH = doc.heightOfString(step.commandOutput, { width: CW - 20}) + 32;
           checkPage(outH + 10);
           doc.rect(ML, y, CW, outH).fill('#0d0d0d');
           doc.rect(ML, y, CW, 18).fill('#1a1a1a');
