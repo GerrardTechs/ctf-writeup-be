@@ -174,9 +174,10 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
         doc.rect(0, 0, PW, 5).fill(diffColor);
         y = 40;
       };
-
+      
       const checkPage = (needed: number) => {
-        if (y + needed > PH - 50) newPage();
+        // Hanya pindah halaman kalau benar-benar tidak cukup
+        if (y + needed > PH - 30) newPage();
       };
 
       // Section heading
