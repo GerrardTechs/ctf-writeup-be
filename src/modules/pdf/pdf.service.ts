@@ -47,17 +47,13 @@ async function fetchImage(url: string): Promise<Buffer | null> {
 
     // Resize ke max width 900px, konversi ke JPEG quality 90
     // Ini mencegah gambar terlalu besar dan blur di PDF
-    const optimized = await sharp(Buffer.from(response.data))
-      .resize({
-        width: 900,
-        withoutEnlargement: true, // jangan scale up kalau gambar kecil
-      })
-      .jpeg({ quality: 90, progressive: true })
+    const converted = await sharp(Buffer.from(response.data))
+      .jpeg({ quality: 95 }) // quality tinggi supaya tidak blur
       .toBuffer();
 
     return optimized;
   } catch (err) {
-    console.error('Failed to fetch/optimize image:', url, err);
+    console.error('Failed to fetch image', url, err);
     return null;
   }
 }
@@ -249,6 +245,7 @@ export async function generateWriteupPdf(writeup: WriteupPdfData): Promise<Buffe
 
         // Images
         // Images
+// Images
 const imgs = stepImages[i];
 for (const imgBuf of imgs) {
   if (!imgBuf) continue;
@@ -257,22 +254,43 @@ for (const imgBuf of imgs) {
     const naturalW = meta.width ?? 500;
     const naturalH = meta.height ?? 300;
     const ratio = naturalH / naturalW;
-    const imgW = CW;
-    const imgH = Math.min(imgW * ratio, 280);
 
-    // Selalu mulai gambar dari halaman baru kalau sisa ruang < setengah halaman
-    const remainingSpace = PH - 50 - y;
-    if (remainingSpace < imgH || remainingSpace < 150) {
+    // Hitung dimensi — fit ke lebar konten, pertahankan aspect ratio
+    // Kalau gambar lebih kecil dari CW, pakai ukuran asli (tidak scale up)
+    const imgW = Math.min(CW, naturalW);
+    const imgH = imgW * ratio;
+
+    // Kalau gambar sangat tinggi (portrait), batasi tinggi max 350
+    const maxH = 350;
+    const finalH = Math.min(imgH, maxH);
+    const finalW = finalH < imgH ? (maxH / ratio) : imgW;
+
+    // Pindah halaman kalau tidak cukup ruang
+    if (PH - 50 - y < finalH + 20) {
       newPage();
     }
 
-    doc.image(imgBuf, ML, y, { width: imgW, height: imgH });
-    y += imgH + 16;
+    // Label screenshots
+    doc.font('Helvetica').fontSize(8).fill('#475569')
+      .text('SCREENSHOT', ML, y, { lineBreak: false });
+    y += 12;
 
-    // Setelah gambar, pastikan ada ruang untuk konten berikutnya
-    checkPage(40);
+    // Border tipis
+    doc.rect(ML, y, finalW, finalH)
+      .strokeColor('#2d2d2d')
+      .lineWidth(0.5)
+      .stroke();
+
+    // Render gambar dengan dimensi proporsional
+    doc.image(imgBuf, ML, y, {
+      width: finalW,
+      height: finalH,
+    });
+
+    y += finalH + 16;
+    checkPage(30);
   } catch (e) {
-    console.error('Failed to render image to PDF:', e);
+    console.error('Failed to render image:', e);
   }
 }
 
