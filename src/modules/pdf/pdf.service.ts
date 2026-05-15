@@ -267,7 +267,7 @@ for (const imgBuf of imgs) {
     const finalW = finalH < imgH ? (maxH / ratio) : imgW;
 
     // Pindah halaman kalau tidak cukup ruang
-    if (PH - 50 - y < finalH + 20) {
+    if (y + finalH + 20 > PH - 30) {
       newPage();
     }
 

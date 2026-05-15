@@ -116,6 +116,24 @@ async function buildApp() {
   // Routes
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 
+  fastify.get('/api/v1/ai/credits', async (req: any, reply) => {
+    // Sudah dihandle di aiRoutes tapi butuh auth
+    // Buat handler langsung di sini
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply.status(401).send({ success: false, error: 'Unauthorized' });
+    }
+  
+    const { prisma } = await import('./config/database');
+    const user = await prisma.user.findUnique({
+      where: { id: (req.user as any).id },
+      select: { aiCredits: true, plan: true },
+    });
+  
+    return { success: true, data: { credits: user?.aiCredits ?? 0, plan: user?.plan ?? 'FREE' } };
+  });
+
   // Public route — tidak perlu auth
 fastify.get('/api/v1/public/writeup/:token', async (req: any, reply) => {
   const { prisma } = await import('./config/database');

@@ -42,9 +42,12 @@ model User {
   email        String    @unique @db.VarChar(100)
   passwordHash String    @db.VarChar(255)
   role         Role      @default(USER)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  writeups     Writeup[]
+  plan            String    @default("FREE") @db.VarChar(20)
+  aiCredits       Int       @default(8)
+  creditResetAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  writeups        Writeup[]
 
   @@map("users")
 }
