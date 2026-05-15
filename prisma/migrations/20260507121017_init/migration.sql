@@ -19,7 +19,7 @@ CREATE TABLE `writeups` (
     `userId` VARCHAR(36) NOT NULL,
     `title` VARCHAR(200) NOT NULL,
     `ctfName` VARCHAR(100) NOT NULL,
-    `category` ENUM('WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT') NOT NULL,
+    `category` ENUM('WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT', 'HARDWARE', 'MOBILE', 'CLOUD', 'BLOCKCHAIN', 'NETWORK', 'STEGO', 'PWNABLE', 'TRIVIA') NOT NULL,
     `difficulty` ENUM('EASY', 'MEDIUM', 'HARD', 'INSANE') NOT NULL,
     `flag` VARCHAR(255) NULL,
     `description` TEXT NULL,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const CreateWriteupSchema = z.object({
   title: z.string().min(3, 'Minimal 3 karakter').max(200),
   ctfName: z.string().min(1).max(100),
-  category: z.enum(['WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT']),
+  category: z.enum(['WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT', 'HARDWARE', 'MOBILE', 'CLOUD', 'BLOCKCHAIN', 'NETWORK', 'STEGO', 'PWNABLE', 'TRIVIA']),
   difficulty: z.enum(['EASY', 'MEDIUM', 'HARD', 'INSANE']),
   flag: z.string().max(255).optional(),
   description: z.string().max(5000).optional(),

@@ -46,7 +46,7 @@ export async function writeupRoutes(fastify: FastifyInstance) {
         properties: {
           title: { type: 'string' },
           ctfName: { type: 'string' },
-          category: { type: 'string', enum: ['WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT'] },
+          category: { type: 'string', enum: ['WEB', 'PWN', 'CRYPTO', 'FORENSICS', 'MISC', 'REV', 'OSINT', 'HARDWARE', 'MOBILE', 'CLOUD', 'BLOCKCHAIN', 'NETWORK', 'STEGO', 'PWNABLE', 'TRIVIA'] },
           difficulty: { type: 'string', enum: ['EASY', 'MEDIUM', 'HARD', 'INSANE'] },
           flag: { type: 'string' },
           description: { type: 'string' },
