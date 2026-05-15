@@ -51,7 +51,7 @@ async function fetchImage(url: string): Promise<Buffer | null> {
       .jpeg({ quality: 95 }) // quality tinggi supaya tidak blur
       .toBuffer();
 
-    return optimized;
+    return converted;
   } catch (err) {
     console.error('Failed to fetch image', url, err);
     return null;
