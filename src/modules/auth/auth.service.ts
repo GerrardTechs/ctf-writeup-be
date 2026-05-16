@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../config/database';
 import { RegisterInput, LoginInput } from './auth.schema';
+import { sanitizeText } from '../../utils/sanitize';
 
 const SALT_ROUNDS = 12;
 
@@ -34,32 +35,41 @@ function recordFailedLogin(email: string) {
 }
 
 export async function registerUser(input: RegisterInput) {
-  // Cek apakah email atau username sudah dipakai
+
+  const sanitized = {
+    username: sanitizeText(input.username),
+    email: sanitizeText(input.email).toLowerCase(),
+    password: input.password,
+  };
+
+ // Validasi ulang setelah sanitasi
+  if (sanitized.username !== input.username) {
+    throw { statusCode: 400, message: 'Username mengandung karakter tidak valid' };
+  }
+
   const existing = await prisma.user.findFirst({
     where: {
-      OR: [{ email: input.email }, { username: input.username }],
+      OR: [{ email: sanitized.email }, { username: sanitized.username }],
     },
   });
 
   if (existing) {
-    const field = existing.email === input.email ? 'Email' : 'Username';
+    // Timing-safe: selalu hash dulu sebelum throw
+    await bcrypt.hash('dummy', 12);
+    const field = existing.email === sanitized.email ? 'Email' : 'Username';
     throw { statusCode: 409, message: `${field} sudah digunakan` };
   }
 
-  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+  const passwordHash = await bcrypt.hash(sanitized.password, 12);
 
   const user = await prisma.user.create({
     data: {
-      username: input.username,
-      email: input.email,
+      username: sanitized.username,
+      email: sanitized.email,
       passwordHash,
     },
     select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
+      id: true, username: true, email: true, role: true, createdAt: true,
     },
   });
 

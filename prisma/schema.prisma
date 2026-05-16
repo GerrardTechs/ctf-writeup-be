@@ -110,3 +110,30 @@ model Image {
   @@index([stepId])
   @@map("images")
 }
+
+model IpRule {
+  id        String    @id @default(uuid()) @db.VarChar(36)
+  ip        String    @unique @db.VarChar(45)
+  type      String    @db.VarChar(10) // 'blacklist' | 'whitelist'
+  reason    String?   @db.VarChar(255)
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  @@index([type])
+  @@map("ip_rules")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  ip        String?  @db.VarChar(45)
+  userId    String?  @db.VarChar(36)
+  action    String   @db.VarChar(100)
+  endpoint  String?  @db.VarChar(255)
+  status    Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([ip])
+  @@index([action])
+  @@map("audit_logs")
+}

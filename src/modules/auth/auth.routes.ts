@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { RegisterSchema, LoginSchema } from './auth.schema';
 import { registerUser, loginUser } from './auth.service';
+import { authRateLimit } from '../../middleware/security.middleware';
 
 const responseSchema = {
   type: 'object',
@@ -24,6 +25,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
       },
     },
+    preHandler: authRateLimit,
   }, async (request, reply) => {
     const body = RegisterSchema.safeParse(request.body);
     if (!body.success) {
@@ -50,6 +52,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
       },
     },
+    preHandler: authRateLimit,
   }, async (request, reply) => {
     const body = LoginSchema.safeParse(request.body);
     if (!body.success) {
@@ -86,6 +89,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
       },
     },
+    preHandler: authRateLimit,
   }, async (request, reply) => {
     const { refreshToken } = request.body as { refreshToken?: string };
     if (!refreshToken) {

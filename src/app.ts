@@ -12,6 +12,7 @@ import { writeupRoutes } from './modules/writeup/writeup.routes';
 import { uploadRoutes } from './modules/upload/upload.routes';
 import { pdfRoutes } from './modules/pdf/pdf.routes';
 import { aiRoutes } from './modules/ai/ai.routes';
+import { ipGuard } from './middleware/security.middleware';
 
 
 const fastify = Fastify({
@@ -113,6 +114,9 @@ async function buildApp() {
       files: 1,
     },
   });
+
+  fastify.addHook('onRequest', ipGuard);
+
   // Routes
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 
@@ -176,6 +180,70 @@ fastify.get('/api/v1/public/writeup/:token', async (req: any, reply) => {
   // Health check
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
   
+// Admin only — manage IP blacklist
+fastify.post('/api/v1/admin/blacklist', async (req: any, reply) => {
+  try {
+    await req.jwtVerify();
+  } catch {
+    return reply.status(401).send({ success: false, error: 'Unauthorized' });
+  }
+
+  const { prisma } = await import('./config/database');
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { role: true },
+  });
+
+  if (user?.role !== 'ADMIN') {
+    return reply.status(403).send({ success: false, error: 'Forbidden' });
+  }
+
+  const { ip, reason, hours } = req.body as { ip: string; reason: string; hours?: number };
+
+  await prisma.ipRule.upsert({
+    where: { ip },
+    create: {
+      ip, type: 'blacklist', reason,
+      expiresAt: hours ? new Date(Date.now() + hours * 60 * 60 * 1000) : undefined,
+    },
+    update: {
+      reason,
+      expiresAt: hours ? new Date(Date.now() + hours * 60 * 60 * 1000) : undefined,
+    },
+  });
+
+  return reply.send({ success: true, message: `IP ${ip} di-blacklist` });
+});
+
+fastify.delete('/api/v1/admin/blacklist/:ip', async (req: any, reply) => {
+  try {
+    await req.jwtVerify();
+  } catch {
+    return reply.status(401).send({ success: false, error: 'Unauthorized' });
+  }
+
+  const { prisma } = await import('./config/database');
+  await prisma.ipRule.deleteMany({ where: { ip: req.params.ip } });
+
+  return reply.send({ success: true, message: `IP ${req.params.ip} di-unban` });
+});
+
+// Lihat audit log — admin only
+fastify.get('/api/v1/admin/audit-logs', async (req: any, reply) => {
+  try {
+    await req.jwtVerify();
+  } catch {
+    return reply.status(401).send({ success: false, error: 'Unauthorized' });
+  }
+
+  const { prisma } = await import('./config/database');
+  const logs = await prisma.auditLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+
+  return reply.send({ success: true, data: logs });
+});
    return fastify;
 }
 
@@ -191,5 +259,7 @@ async function main() {
     process.exit(1);
   }
 }
+
+
 
 main();
