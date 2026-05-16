@@ -6,7 +6,18 @@ export const RegisterSchema = z.object({
     .min(3, 'Username minimal 3 karakter')
     .max(50)
     .regex(/^[a-zA-Z0-9_]+$/, 'Username hanya boleh huruf, angka, dan underscore'),
-  email: z.string().email('Format email tidak valid').max(100),
+  email: z
+    .string()
+    .email('Format email tidak valid')
+    .max(100)
+    .refine(
+      (email) => {
+        const allowedDomains = ['gmail.com', 'yahoo.com', 'yahoo.co.id'];
+        const domain = email.split('@')[1]?.toLowerCase();
+        return allowedDomains.includes(domain);
+      },
+      { message: 'Hanya email Gmail atau Yahoo yang diizinkan' }
+    ),
   password: z
     .string()
     .min(8, 'Password minimal 8 karakter')
