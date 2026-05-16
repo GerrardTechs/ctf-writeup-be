@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { RegisterSchema, LoginSchema } from './auth.schema';
-import { registerUser, loginUser } from './auth.service';
+import { registerUser, loginUser, verifyOtp, resendOtp } from './auth.service';
 import { authRateLimit } from '../../middleware/security.middleware';
+
 
 const responseSchema = {
   type: 'object',
@@ -76,6 +77,78 @@ export async function authRoutes(fastify: FastifyInstance) {
       data: { user, token, refreshToken, expiresIn: '15m' },
     });
   });
+
+  // POST /api/v1/auth/verify-otp
+fastify.post('/verify-otp', {
+  schema: {
+    tags: ['Auth'],
+    summary: 'Verifikasi email dengan kode OTP',
+    body: {
+      type: 'object',
+      required: ['email', 'otp'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+        otp: { type: 'string', minLength: 6, maxLength: 6 },
+      },
+    },
+  },
+}, async (request, reply) => {
+  const { email, otp } = request.body as { email: string; otp: string };
+  const result = await verifyOtp(email, otp);
+  return reply.status(200).send({ success: true, data: result });
+});
+
+// POST /api/v1/auth/resend-otp
+fastify.post('/resend-otp', {
+  schema: {
+    tags: ['Auth'],
+    summary: 'Kirim ulang kode OTP',
+    body: {
+      type: 'object',
+      required: ['email'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+      },
+    },
+  },
+}, async (request, reply) => {
+  const { email } = request.body as { email: string };
+  const result = await resendOtp(email);
+  return reply.status(200).send({ success: true, data: result });
+});
+
+fastify.post('/login', {
+  // schema sama
+}, async (request, reply) => {
+  const body = LoginSchema.safeParse(request.body);
+  if (!body.success) {
+    return reply.status(400).send({
+      success: false,
+      error: 'Validasi gagal',
+      details: body.error.flatten().fieldErrors,
+    });
+  }
+
+  try {
+    const user = await loginUser(body.data);
+    const token = fastify.jwt.sign({ id: user.id, role: user.role }, { expiresIn: '15m' });
+    const refreshToken = fastify.jwt.sign({ id: user.id, type: 'refresh' }, { expiresIn: '7d' });
+    return reply.status(200).send({
+      success: true,
+      data: { user, token, refreshToken, expiresIn: '15m' },
+    });
+  } catch (err: any) {
+    if (err.code === 'EMAIL_NOT_VERIFIED') {
+      return reply.status(403).send({
+        success: false,
+        error: err.message,
+        code: 'EMAIL_NOT_VERIFIED',
+        email: err.email,
+      });
+    }
+    throw err;
+  }
+});
 
   fastify.post('/refresh', {
     schema: {
