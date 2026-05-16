@@ -40,44 +40,6 @@ export async function authRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ success: true, data: user });
   });
 
-  fastify.post('/login', {
-    schema: {
-      tags: ['Auth'],
-      summary: 'Login dan dapatkan JWT token',
-      body: {
-        type: 'object',
-        required: ['email', 'password'],
-        properties: {
-          email: { type: 'string', format: 'email' },
-          password: { type: 'string' },
-        },
-      },
-    },
-    preHandler: authRateLimit,
-  }, async (request, reply) => {
-    const body = LoginSchema.safeParse(request.body);
-    if (!body.success) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Validasi gagal',
-        details: body.error.flatten().fieldErrors,
-      });
-    }
-    const user = await loginUser(body.data);
-    const token = fastify.jwt.sign(
-      { id: user.id, role: user.role },
-      { expiresIn: '15m' }
-    );
-    const refreshToken = fastify.jwt.sign(
-      { id: user.id, type: 'refresh' },
-      { expiresIn: '7d' }
-    );
-    return reply.status(200).send({
-      success: true,
-      data: { user, token, refreshToken, expiresIn: '15m' },
-    });
-  });
-
   // POST /api/v1/auth/verify-otp
 fastify.post('/verify-otp', {
   schema: {
